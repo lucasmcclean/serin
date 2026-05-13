@@ -396,4 +396,41 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn lex_comment() {
+        let lexer = Lexer::new("123 (* comment *) 456");
+
+        let tokens = lexer.tokenize().unwrap();
+
+        let values: Vec<Token> = tokens.into_iter().map(|t| t.value).collect();
+
+        assert_eq!(
+            values,
+            vec![Token::Integer(123), Token::Integer(456), Token::Eof,]
+        );
+    }
+
+    #[test]
+    fn lex_nested_comments() {
+        let lexer = Lexer::new("123 (* outer (* inner *) outer *) 456");
+
+        let tokens = lexer.tokenize().unwrap();
+
+        let values: Vec<Token> = tokens.into_iter().map(|t| t.value).collect();
+
+        assert_eq!(
+            values,
+            vec![Token::Integer(123), Token::Integer(456), Token::Eof,]
+        );
+    }
+
+    #[test]
+    fn lex_unterminated_comment() {
+        let lexer = Lexer::new("(* test");
+
+        let result = lexer.tokenize();
+
+        assert!(matches!(result, Err(LexError::UnterminatedComment)));
+    }
 }
