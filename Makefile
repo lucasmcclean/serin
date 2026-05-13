@@ -1,5 +1,9 @@
 .PHONY: setup-hooks fmt check all
 
+
+# Run formatting, checks, and tests
+all: fmt check test
+
 # Configure Git to use the repository-managed hooks directory
 setup-hooks:
 	@chmod +x .githooks/pre-commit
@@ -17,5 +21,6 @@ check:
 	@cargo sort-derives --check
 	@cargo clippy --quiet
 
-# Run formatting and checks
-all: fmt check
+# Run all tests
+test:
+	@cargo test
