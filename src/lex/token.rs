@@ -1,0 +1,32 @@
+#[derive(Debug, PartialEq)]
+pub(crate) enum Token {
+    Integer(i64),
+    Boolean(bool),
+
+    Identifier(String),
+
+    Let,
+    In,
+    If,
+    Then,
+    Else,
+    Not,
+
+    Backslash,
+    Arrow,
+    Equals,
+    LeftParen,
+    RightParen,
+    Comma,
+
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Less,
+    Greater,
+    LessEqual,
+    GreaterEqual,
+
+    Eof,
+}
