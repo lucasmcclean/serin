@@ -1,24 +1,20 @@
-#[derive(Debug, PartialEq)]
-pub(crate) enum Token {
+#[derive(Clone, Debug, PartialEq)]
+pub enum Token {
     Integer(i64),
     Boolean(bool),
-
     Identifier(String),
-
     Let,
     In,
     If,
     Then,
     Else,
     Not,
-
     Backslash,
     Arrow,
     Equals,
     LeftParen,
     RightParen,
     Comma,
-
     Plus,
     Minus,
     Star,
@@ -27,6 +23,5 @@ pub(crate) enum Token {
     Greater,
     LessEqual,
     GreaterEqual,
-
     Eof,
 }

@@ -1,4 +1,4 @@
-use crate::lex::{error::LexError, token::Token};
+use crate::lex::{self, token::Token};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Span {
@@ -25,7 +25,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn tokenize(mut self) -> Result<Vec<Spanned<Token>>, LexError> {
+    pub fn tokenize(mut self) -> Result<Vec<Spanned<Token>>, lex::Error> {
         let mut tokens = Vec::new();
 
         loop {
@@ -43,7 +43,25 @@ impl<'a> Lexer<'a> {
         Ok(tokens)
     }
 
-    fn next(&mut self) -> Result<Spanned<Token>, LexError> {
+    fn peek(&self) -> Option<u8> {
+        self.source.get(self.position).copied()
+    }
+
+    fn peek_next(&self) -> Option<u8> {
+        self.source.get(self.position + 1).copied()
+    }
+
+    fn advance(&mut self) -> Option<u8> {
+        let byte = self.peek();
+
+        if byte.is_some() {
+            self.position += 1;
+        }
+
+        byte
+    }
+
+    fn next(&mut self) -> Result<Spanned<Token>, lex::Error> {
         self.skip_whitespace()?;
 
         let start = self.position;
@@ -128,7 +146,7 @@ impl<'a> Lexer<'a> {
 
             None => Token::Eof,
 
-            Some(byte) => return Err(LexError::UnexpectedByte(byte, start)),
+            Some(byte) => return Err(lex::Error::UnexpectedByte(byte, start)),
         };
 
         let end = self.position;
@@ -181,24 +199,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn skip_whitespace(&mut self) -> Result<(), LexError> {
-        loop {
-            while matches!(self.peek(), Some(b' ' | b'\n' | b'\t' | b'\r')) {
-                self.advance();
-            }
-
-            if self.peek() == Some(b'(') && self.peek_next() == Some(b'*') {
-                self.lex_comment()?;
-                continue;
-            }
-
-            break;
-        }
-
-        Ok(())
-    }
-
-    fn lex_comment(&mut self) -> Result<(), LexError> {
+    fn lex_comment(&mut self) -> Result<(), lex::Error> {
         self.advance();
         self.advance();
 
@@ -229,25 +230,24 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        Err(LexError::UnterminatedComment)
+        Err(lex::Error::UnterminatedComment)
     }
 
-    fn peek(&self) -> Option<u8> {
-        self.source.get(self.position).copied()
-    }
+    fn skip_whitespace(&mut self) -> Result<(), lex::Error> {
+        loop {
+            while matches!(self.peek(), Some(b' ' | b'\n' | b'\t' | b'\r')) {
+                self.advance();
+            }
 
-    fn peek_next(&self) -> Option<u8> {
-        self.source.get(self.position + 1).copied()
-    }
+            if self.peek() == Some(b'(') && self.peek_next() == Some(b'*') {
+                self.lex_comment()?;
+                continue;
+            }
 
-    fn advance(&mut self) -> Option<u8> {
-        let byte = self.peek();
-
-        if byte.is_some() {
-            self.position += 1;
+            break;
         }
 
-        byte
+        Ok(())
     }
 }
 
@@ -431,6 +431,6 @@ mod tests {
 
         let result = lexer.tokenize();
 
-        assert!(matches!(result, Err(LexError::UnterminatedComment)));
+        assert!(matches!(result, Err(lex::Error::UnterminatedComment)));
     }
 }

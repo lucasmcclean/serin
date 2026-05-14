@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub enum LexError {
+pub enum Error {
     UnexpectedByte(u8, usize),
     UnterminatedComment,
 }
