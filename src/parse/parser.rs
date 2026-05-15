@@ -68,10 +68,7 @@ impl Parser {
     fn parse_application(&mut self) -> Result<Expression> {
         let mut expr = self.parse_primary()?;
 
-        while matches!(
-            self.peek().value,
-            Token::Integer(_) | Token::Boolean(_) | Token::Identifier(_) | Token::LeftParen
-        ) {
+        while self.starts_primary() {
             let arg = self.parse_primary()?;
 
             expr = Expression::Application {
@@ -81,6 +78,13 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+    fn starts_primary(&self) -> bool {
+        matches!(
+            &self.peek().value,
+            Token::Integer(_) | Token::Boolean(_) | Token::Identifier(_) | Token::LeftParen
+        )
     }
 
     fn parse_primary(&mut self) -> Result<Expression> {
