@@ -61,7 +61,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_expression(&mut self) -> Result<Expression> {
+    fn parse_expression(&mut self) -> Result<Expression> {
         self.parse_multiplication()
     }
 
@@ -239,17 +239,24 @@ mod tests {
     }
 
     #[test]
-    fn parses_application_chain() {
+    fn parses_application_associativity() {
         let expr = parse_source("f x y").unwrap();
 
         match expr {
-            Expression::Application { function, .. } => match *function {
-                Expression::Application { .. } => {}
-                Expression::Identifier(_) => {
-                    panic!("expected left-associative application chain")
+            Expression::Application { function, argument } => {
+                match *function {
+                    Expression::Application { .. } => {}
+                    Expression::Identifier(_) => {
+                        panic!("expected left-associated application")
+                    }
+                    _ => panic!("invalid structure"),
                 }
-                _ => panic!("unexpected structure"),
-            },
+
+                match *argument {
+                    Expression::Identifier(_) => {}
+                    _ => panic!("unexpected argument structure"),
+                }
+            }
             _ => panic!("expected application"),
         }
     }
@@ -265,12 +272,28 @@ mod tests {
     }
 
     #[test]
-    fn parses_double_unary() {
+    fn parses_double_unary_nesting() {
         let expr = parse_source("--x").unwrap();
 
         match expr {
-            Expression::Unary { .. } => {}
-            _ => panic!("expected unary chain"),
+            Expression::Unary { operand, .. } => match *operand {
+                Expression::Unary { .. } => {}
+                _ => panic!("expected nested unary"),
+            },
+            _ => panic!("expected unary"),
+        }
+    }
+
+    #[test]
+    fn unary_applies_to_whole_expression() {
+        let expr = parse_source("-f x").unwrap();
+
+        match expr {
+            Expression::Unary { operand, .. } => match *operand {
+                Expression::Application { .. } => {}
+                _ => panic!("expected unary over application"),
+            },
+            _ => panic!("expected unary"),
         }
     }
 
@@ -300,6 +323,19 @@ mod tests {
 
         match expr {
             Expression::Binary { .. } => {}
+            _ => panic!("expected binary"),
+        }
+    }
+
+    #[test]
+    fn unary_binds_tighter_than_multiplication() {
+        let expr = parse_source("-a * b").unwrap();
+
+        match expr {
+            Expression::Binary { left, .. } => match *left {
+                Expression::Unary { .. } => {}
+                _ => panic!("expected unary on left side"),
+            },
             _ => panic!("expected binary"),
         }
     }
