@@ -1,5 +1,5 @@
 use crate::{
-    ast::expression::Expression,
+    ast::expression::{Expression, UnaryOperator},
     lex::{lexer::Spanned, token::Token},
     parse,
 };
@@ -62,7 +62,31 @@ impl Parser {
     }
 
     pub fn parse_expression(&mut self) -> Result<Expression> {
-        self.parse_application()
+        self.parse_unary()
+    }
+
+    fn parse_unary(&mut self) -> Result<Expression> {
+        match self.peek().value {
+            Token::Minus => {
+                self.advance();
+                let expr = self.parse_unary()?;
+                Ok(Expression::Unary {
+                    operator: UnaryOperator::Negate,
+                    operand: Box::new(expr),
+                })
+            }
+
+            Token::Not => {
+                self.advance();
+                let expr = self.parse_unary()?;
+                Ok(Expression::Unary {
+                    operator: UnaryOperator::Not,
+                    operand: Box::new(expr),
+                })
+            }
+
+            _ => self.parse_application(),
+        }
     }
 
     fn parse_application(&mut self) -> Result<Expression> {
@@ -203,6 +227,26 @@ mod tests {
                 _ => panic!("unexpected structure"),
             },
             _ => panic!("expected application"),
+        }
+    }
+
+    #[test]
+    fn parses_unary_negation() {
+        let expr = parse_source("-x").unwrap();
+
+        match expr {
+            Expression::Unary { .. } => {}
+            _ => panic!("expected unary"),
+        }
+    }
+
+    #[test]
+    fn parses_double_unary() {
+        let expr = parse_source("--x").unwrap();
+
+        match expr {
+            Expression::Unary { .. } => {}
+            _ => panic!("expected unary chain"),
         }
     }
 }
