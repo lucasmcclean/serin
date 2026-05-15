@@ -106,6 +106,11 @@ impl<'a> Lexer<'a> {
                 Token::Slash
             }
 
+            Some(b'%') => {
+                self.advance();
+                Token::Percent
+            }
+
             Some(b'=') => {
                 self.advance();
                 Token::Equals
@@ -334,7 +339,7 @@ mod tests {
 
     #[test]
     fn lex_operators() {
-        let lexer = Lexer::new("+ - * / < > <= >=");
+        let lexer = Lexer::new("+ - * / % < > <= >=");
 
         let tokens = lexer.tokenize().unwrap();
 
@@ -347,6 +352,7 @@ mod tests {
                 Token::Minus,
                 Token::Star,
                 Token::Slash,
+                Token::Percent,
                 Token::Less,
                 Token::Greater,
                 Token::LessEqual,
