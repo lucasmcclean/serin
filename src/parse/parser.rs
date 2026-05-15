@@ -1,5 +1,5 @@
 use crate::{
-    ast::expression::{Expression, UnaryOperator},
+    ast::expression::{BinaryOperator, Expression, UnaryOperator},
     lex::{lexer::Spanned, token::Token},
     parse,
 };
@@ -62,7 +62,31 @@ impl Parser {
     }
 
     pub fn parse_expression(&mut self) -> Result<Expression> {
-        self.parse_unary()
+        self.parse_multiplication()
+    }
+
+    fn parse_multiplication(&mut self) -> Result<Expression> {
+        let mut left = self.parse_unary()?;
+
+        loop {
+            let operator = match self.peek().value {
+                Token::Star => BinaryOperator::Multiply,
+                Token::Slash => BinaryOperator::Divide,
+                Token::Percent => BinaryOperator::Modulo,
+                _ => break,
+            };
+
+            self.advance();
+            let right = self.parse_unary()?;
+
+            left = Expression::Binary {
+                operator,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
     }
 
     fn parse_unary(&mut self) -> Result<Expression> {
@@ -247,6 +271,36 @@ mod tests {
         match expr {
             Expression::Unary { .. } => {}
             _ => panic!("expected unary chain"),
+        }
+    }
+
+    #[test]
+    fn parses_multiplication() {
+        let expr = parse_source("a * b").unwrap();
+
+        match expr {
+            Expression::Binary { .. } => {}
+            _ => panic!("expected binary"),
+        }
+    }
+
+    #[test]
+    fn parses_multiplication_chain() {
+        let expr = parse_source("a * b * c").unwrap();
+
+        match expr {
+            Expression::Binary { .. } => {}
+            _ => panic!("expected left-associative chain"),
+        }
+    }
+
+    #[test]
+    fn parses_mixed_unary_and_multiplication() {
+        let expr = parse_source("-a * b").unwrap();
+
+        match expr {
+            Expression::Binary { .. } => {}
+            _ => panic!("expected binary"),
         }
     }
 }
