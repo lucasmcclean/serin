@@ -42,6 +42,7 @@ pub enum BinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    Modulo,
     Less,
     Greater,
     LessEqual,

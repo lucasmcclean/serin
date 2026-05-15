@@ -19,6 +19,7 @@ pub enum Token {
     Minus,
     Star,
     Slash,
+    Percent,
     Less,
     Greater,
     LessEqual,
