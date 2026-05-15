@@ -253,46 +253,110 @@ mod tests {
         parser.parse()
     }
 
-    #[test]
-    fn parses_integer() {
-        let expr = parse_source("42").unwrap();
+    fn expect_integer(expr: Expression, expected: i64) {
+        match expr {
+            Expression::Integer(value) => assert_eq!(value, expected),
+            other => panic!("expected integer {expected}, got {other:?}"),
+        }
+    }
 
-        assert!(matches!(expr, Expression::Integer(42)));
+    fn expect_boolean(expr: Expression, expected: bool) {
+        match expr {
+            Expression::Boolean(value) => assert_eq!(value, expected),
+            other => panic!("expected boolean {expected}, got {other:?}"),
+        }
+    }
+
+    fn expect_identifier(expr: Expression, expected: &str) {
+        match expr {
+            Expression::Identifier(name) => assert_eq!(name, expected),
+            other => panic!("expected identifier {expected:?}, got {other:?}"),
+        }
+    }
+
+    fn expect_unary(expr: Expression, expected: UnaryOperator) -> Expression {
+        match expr {
+            Expression::Unary { operator, operand } => {
+                assert_eq!(
+                    std::mem::discriminant(&operator),
+                    std::mem::discriminant(&expected),
+                    "expected unary operator {:?}, got {:?}",
+                    expected,
+                    operator
+                );
+                *operand
+            }
+            other => panic!("expected unary {:?}, got {other:?}", expected),
+        }
+    }
+
+    fn expect_binary(expr: Expression, expected: BinaryOperator) -> (Expression, Expression) {
+        match expr {
+            Expression::Binary {
+                operator,
+                left,
+                right,
+            } => {
+                assert_eq!(
+                    std::mem::discriminant(&operator),
+                    std::mem::discriminant(&expected),
+                    "expected binary operator {:?}, got {:?}",
+                    expected,
+                    operator
+                );
+                (*left, *right)
+            }
+            other => panic!("expected binary {:?}, got {other:?}", expected),
+        }
+    }
+
+    fn expect_application(expr: Expression) -> (Expression, Expression) {
+        match expr {
+            Expression::Application { function, argument } => (*function, *argument),
+            other => panic!("expected application, got {other:?}"),
+        }
     }
 
     #[test]
-    fn parses_boolean() {
-        let expr = parse_source("true").unwrap();
+    fn parses_integer() {
+        let expr = parse_source("42").unwrap();
+        expect_integer(expr, 42);
+    }
 
-        assert!(matches!(expr, Expression::Boolean(true)));
+    #[test]
+    fn parses_boolean_true() {
+        let expr = parse_source("true").unwrap();
+        expect_boolean(expr, true);
+    }
+
+    #[test]
+    fn parses_boolean_false() {
+        let expr = parse_source("false").unwrap();
+        expect_boolean(expr, false);
     }
 
     #[test]
     fn parses_identifier() {
         let expr = parse_source("x").unwrap();
-
-        assert!(matches!(expr, Expression::Identifier(ref name) if name == "x"));
+        expect_identifier(expr, "x");
     }
 
     #[test]
     fn parses_parenthesized_integer() {
         let expr = parse_source("(42)").unwrap();
-
-        assert!(matches!(expr, Expression::Integer(42)));
+        expect_integer(expr, 42);
     }
 
     #[test]
     fn parses_parenthesized_identifier() {
         let expr = parse_source("(x)").unwrap();
-
-        assert!(matches!(expr, Expression::Identifier(ref name) if name == "x"));
+        expect_identifier(expr, "x");
     }
 
     #[test]
     fn parses_nested_parentheses() {
         let expr = parse_source("((x))").unwrap();
-
-        assert!(matches!(expr, Expression::Identifier(ref name) if name == "x"));
+        expect_identifier(expr, "x");
     }
 
     #[test]
@@ -309,266 +373,322 @@ mod tests {
     fn parses_application_associativity() {
         let expr = parse_source("f x y").unwrap();
 
-        match expr {
-            Expression::Application { function, argument } => {
-                match *function {
-                    Expression::Application { .. } => {}
-                    Expression::Identifier(_) => {
-                        panic!("expected left-associated application")
-                    }
-                    _ => panic!("invalid structure"),
-                }
+        let (fx, y) = expect_application(expr);
+        let (f, x) = expect_application(fx);
 
-                match *argument {
-                    Expression::Identifier(_) => {}
-                    _ => panic!("unexpected argument structure"),
-                }
-            }
-            _ => panic!("expected application"),
-        }
+        expect_identifier(f, "f");
+        expect_identifier(x, "x");
+        expect_identifier(y, "y");
+    }
+
+    #[test]
+    fn parses_application_with_parenthesized_function() {
+        let expr = parse_source("(f x) y").unwrap();
+
+        let (fx, y) = expect_application(expr);
+        let (f, x) = expect_application(fx);
+
+        expect_identifier(f, "f");
+        expect_identifier(x, "x");
+        expect_identifier(y, "y");
+    }
+
+    #[test]
+    fn parses_application_with_parenthesized_argument() {
+        let expr = parse_source("f (x + y)").unwrap();
+
+        let (f, arg) = expect_application(expr);
+        expect_identifier(f, "f");
+
+        let (x, y) = expect_binary(arg, BinaryOperator::Add);
+        expect_identifier(x, "x");
+        expect_identifier(y, "y");
     }
 
     #[test]
     fn parses_unary_negation() {
         let expr = parse_source("-x").unwrap();
+        let inner = expect_unary(expr, UnaryOperator::Negate);
+        expect_identifier(inner, "x");
+    }
 
-        match expr {
-            Expression::Unary { .. } => {}
-            _ => panic!("expected unary"),
-        }
+    #[test]
+    fn parses_unary_not() {
+        let expr = parse_source("not x").unwrap();
+        let inner = expect_unary(expr, UnaryOperator::Not);
+        expect_identifier(inner, "x");
     }
 
     #[test]
     fn parses_double_unary_nesting() {
         let expr = parse_source("--x").unwrap();
-
-        match expr {
-            Expression::Unary { operand, .. } => match *operand {
-                Expression::Unary { .. } => {}
-                _ => panic!("expected nested unary"),
-            },
-            _ => panic!("expected unary"),
-        }
+        let inner = expect_unary(expr, UnaryOperator::Negate);
+        let inner = expect_unary(inner, UnaryOperator::Negate);
+        expect_identifier(inner, "x");
     }
 
     #[test]
-    fn unary_applies_to_whole_expression() {
+    fn unary_binds_to_application() {
         let expr = parse_source("-f x").unwrap();
 
-        match expr {
-            Expression::Unary { operand, .. } => match *operand {
-                Expression::Application { .. } => {}
-                _ => panic!("expected unary over application"),
-            },
-            _ => panic!("expected unary"),
-        }
+        let inner = expect_unary(expr, UnaryOperator::Negate);
+        let (f, x) = expect_application(inner);
+
+        expect_identifier(f, "f");
+        expect_identifier(x, "x");
     }
 
     #[test]
-    fn parses_multiplication() {
-        let expr = parse_source("a * b").unwrap();
+    fn unary_binds_tighter_than_multiplication_on_left() {
+        let expr = parse_source("-a * b").unwrap();
 
-        match expr {
-            Expression::Binary { .. } => {}
-            _ => panic!("expected binary"),
-        }
+        let (left, right) = expect_binary(expr, BinaryOperator::Multiply);
+        let inner = expect_unary(left, UnaryOperator::Negate);
+
+        expect_identifier(inner, "a");
+        expect_identifier(right, "b");
     }
 
     #[test]
-    fn parses_multiplication_chain() {
+    fn unary_binds_tighter_than_multiplication_on_right() {
+        let expr = parse_source("a * -b").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Multiply);
+
+        expect_identifier(left, "a");
+        let inner = expect_unary(right, UnaryOperator::Negate);
+        expect_identifier(inner, "b");
+    }
+
+    #[test]
+    fn multiplication_is_left_associative() {
         let expr = parse_source("a * b * c").unwrap();
 
-        match expr {
-            Expression::Binary { .. } => {}
-            _ => panic!("expected left-associative chain"),
-        }
+        let (left, c) = expect_binary(expr, BinaryOperator::Multiply);
+        let (a, b) = expect_binary(left, BinaryOperator::Multiply);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
     }
 
     #[test]
-    fn parses_mixed_unary_and_multiplication() {
-        let expr = parse_source("-a * b").unwrap();
+    fn division_and_modulo_parse_at_multiplicative_precedence() {
+        let expr = parse_source("a / b % c").unwrap();
 
-        match expr {
-            Expression::Binary { .. } => {}
-            _ => panic!("expected binary"),
-        }
-    }
+        let (left, c) = expect_binary(expr, BinaryOperator::Modulo);
+        let (a, b) = expect_binary(left, BinaryOperator::Divide);
 
-    #[test]
-    fn unary_binds_tighter_than_multiplication() {
-        let expr = parse_source("-a * b").unwrap();
-
-        match expr {
-            Expression::Binary { left, .. } => match *left {
-                Expression::Unary { .. } => {}
-                _ => panic!("expected unary on left side"),
-            },
-            _ => panic!("expected binary"),
-        }
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
     }
 
     #[test]
     fn multiplication_binds_tighter_than_addition() {
         let expr = parse_source("a + b * c").unwrap();
 
-        match expr {
-            Expression::Binary {
-                operator: op1,
-                left: _,
-                right,
-            } => {
-                assert!(matches!(op1, BinaryOperator::Add));
+        let (left, right) = expect_binary(expr, BinaryOperator::Add);
+        let (b, c) = expect_binary(right, BinaryOperator::Multiply);
 
-                match *right {
-                    Expression::Binary { operator: op2, .. } => {
-                        assert!(matches!(op2, BinaryOperator::Multiply));
-                    }
-                    _ => panic!("expected multiplication on right side"),
-                }
-            }
-            _ => panic!("expected addition at root"),
-        }
+        expect_identifier(left, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
+    }
+
+    #[test]
+    fn addition_is_left_associative() {
+        let expr = parse_source("a + b + c").unwrap();
+
+        let (left, c) = expect_binary(expr, BinaryOperator::Add);
+        let (a, b) = expect_binary(left, BinaryOperator::Add);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
+    }
+
+    #[test]
+    fn subtraction_is_left_associative() {
+        let expr = parse_source("a - b - c").unwrap();
+
+        let (left, c) = expect_binary(expr, BinaryOperator::Subtract);
+        let (a, b) = expect_binary(left, BinaryOperator::Subtract);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
+    }
+
+    #[test]
+    fn x_minus_y_is_binary_subtraction() {
+        let expr = parse_source("x -y").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Subtract);
+        expect_identifier(left, "x");
+        expect_identifier(right, "y");
+    }
+
+    #[test]
+    fn x_minus_minus_y_is_subtraction_with_unary_rhs() {
+        let expr = parse_source("x - -y").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Subtract);
+        expect_identifier(left, "x");
+
+        let inner = expect_unary(right, UnaryOperator::Negate);
+        expect_identifier(inner, "y");
     }
 
     #[test]
     fn parentheses_override_precedence() {
         let expr = parse_source("(a + b) * c").unwrap();
 
-        match expr {
-            Expression::Binary { operator, .. } => {
-                assert!(matches!(operator, BinaryOperator::Multiply));
-            }
-            _ => panic!("expected binary"),
-        }
+        let (left, right) = expect_binary(expr, BinaryOperator::Multiply);
+        let (a, b) = expect_binary(left, BinaryOperator::Add);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(right, "c");
+    }
+
+    #[test]
+    fn deeply_nested_parentheses_override_precedence() {
+        let expr = parse_source("((a + b) * (c - d))").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Multiply);
+        let (a, b) = expect_binary(left, BinaryOperator::Add);
+        let (c, d) = expect_binary(right, BinaryOperator::Subtract);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
+        expect_identifier(d, "d");
     }
 
     #[test]
     fn parses_equality() {
         let expr = parse_source("a == b").unwrap();
 
-        match expr {
-            Expression::Binary { operator, .. } => {
-                assert!(matches!(operator, BinaryOperator::Equal));
-            }
-            _ => panic!("expected equality binary"),
-        }
+        let (left, right) = expect_binary(expr, BinaryOperator::Equal);
+        expect_identifier(left, "a");
+        expect_identifier(right, "b");
     }
 
     #[test]
-    fn parses_less_than() {
-        let expr = parse_source("a < b").unwrap();
+    fn equality_is_left_associative() {
+        let expr = parse_source("a == b == c").unwrap();
 
-        match expr {
-            Expression::Binary { operator, .. } => {
-                assert!(matches!(operator, BinaryOperator::Less));
-            }
-            _ => panic!("expected comparison binary"),
-        }
+        let (left, c) = expect_binary(expr, BinaryOperator::Equal);
+        let (a, b) = expect_binary(left, BinaryOperator::Equal);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
     }
 
     #[test]
     fn comparison_binds_tighter_than_equality() {
         let expr = parse_source("a < b == c").unwrap();
 
-        match expr {
-            Expression::Binary {
-                operator,
-                left,
-                right,
-            } => {
-                assert!(matches!(operator, BinaryOperator::Equal));
+        let (left, right) = expect_binary(expr, BinaryOperator::Equal);
+        let (a, b) = expect_binary(left, BinaryOperator::Less);
 
-                match *left {
-                    Expression::Binary { operator: op2, .. } => {
-                        assert!(matches!(op2, BinaryOperator::Less));
-                    }
-                    _ => panic!("expected comparison on left side"),
-                }
-
-                match *right {
-                    Expression::Identifier(ref name) if name == "c" => {}
-                    _ => panic!("unexpected right side"),
-                }
-            }
-            _ => panic!("expected equality at root"),
-        }
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(right, "c");
     }
 
     #[test]
-    fn parses_chained_comparisons_as_left_associative() {
+    fn parses_less_than() {
+        let expr = parse_source("a < b").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Less);
+        expect_identifier(left, "a");
+        expect_identifier(right, "b");
+    }
+
+    #[test]
+    fn parses_less_equal() {
+        let expr = parse_source("a <= b").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::LessEqual);
+        expect_identifier(left, "a");
+        expect_identifier(right, "b");
+    }
+
+    #[test]
+    fn parses_greater_than() {
+        let expr = parse_source("a > b").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Greater);
+        expect_identifier(left, "a");
+        expect_identifier(right, "b");
+    }
+
+    #[test]
+    fn parses_greater_equal() {
+        let expr = parse_source("a >= b").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::GreaterEqual);
+        expect_identifier(left, "a");
+        expect_identifier(right, "b");
+    }
+
+    #[test]
+    fn comparison_is_left_associative() {
         let expr = parse_source("a < b < c").unwrap();
 
-        match expr {
-            Expression::Binary { operator, left, .. } => {
-                assert!(matches!(operator, BinaryOperator::Less));
+        let (left, c) = expect_binary(expr, BinaryOperator::Less);
+        let (a, b) = expect_binary(left, BinaryOperator::Less);
 
-                match *left {
-                    Expression::Binary { operator: op2, .. } => {
-                        assert!(matches!(op2, BinaryOperator::Less));
-                    }
-                    _ => panic!("expected nested comparison"),
-                }
-            }
-            _ => panic!("expected comparison"),
-        }
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
     }
 
     #[test]
     fn addition_binds_tighter_than_comparison() {
         let expr = parse_source("a + b < c").unwrap();
 
-        match expr {
-            Expression::Binary {
-                operator,
-                left,
-                right,
-            } => {
-                assert!(matches!(operator, BinaryOperator::Less));
+        let (left, right) = expect_binary(expr, BinaryOperator::Less);
+        let (a, b) = expect_binary(left, BinaryOperator::Add);
 
-                match *left {
-                    Expression::Binary { operator: op2, .. } => {
-                        assert!(matches!(op2, BinaryOperator::Add));
-                    }
-                    _ => panic!("expected addition on left side"),
-                }
-
-                match *right {
-                    Expression::Identifier(_) => {}
-                    _ => panic!("unexpected right side"),
-                }
-            }
-            _ => panic!("expected comparison root"),
-        }
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(right, "c");
     }
 
     #[test]
     fn addition_binds_tighter_than_equality() {
         let expr = parse_source("a + b == c").unwrap();
 
-        match expr {
-            Expression::Binary { operator, left, .. } => {
-                assert!(matches!(operator, BinaryOperator::Equal));
+        let (left, right) = expect_binary(expr, BinaryOperator::Equal);
+        let (a, b) = expect_binary(left, BinaryOperator::Add);
 
-                match *left {
-                    Expression::Binary { operator: op2, .. } => {
-                        assert!(matches!(op2, BinaryOperator::Add));
-                    }
-                    _ => panic!("expected addition on left"),
-                }
-            }
-            _ => panic!("expected equality"),
-        }
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+        expect_identifier(right, "c");
     }
 
     #[test]
-    fn parentheses_override_comparison_precedence() {
-        let expr = parse_source("(a < b) + c").unwrap();
+    fn complex_precedence_chain_parses_correctly() {
+        let expr = parse_source("f x + -a * b == c < d").unwrap();
 
-        match expr {
-            Expression::Binary { operator, .. } => {
-                assert!(matches!(operator, BinaryOperator::Add));
-            }
-            _ => panic!("expected addition"),
-        }
+        let (left_eq, right_less) = expect_binary(expr, BinaryOperator::Equal);
+
+        let (add_left, add_right) = expect_binary(left_eq, BinaryOperator::Add);
+        let (f, x) = expect_application(add_left);
+        expect_identifier(f, "f");
+        expect_identifier(x, "x");
+
+        let (mul_left, mul_right) = expect_binary(add_right, BinaryOperator::Multiply);
+        let a = expect_unary(mul_left, UnaryOperator::Negate);
+        expect_identifier(a, "a");
+        expect_identifier(mul_right, "b");
+
+        let (c, d) = expect_binary(right_less, BinaryOperator::Less);
+        expect_identifier(c, "c");
+        expect_identifier(d, "d");
     }
 }
