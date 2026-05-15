@@ -62,7 +62,30 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Result<Expression> {
-        self.parse_multiplication()
+        self.parse_addition()
+    }
+
+    fn parse_addition(&mut self) -> Result<Expression> {
+        let mut left = self.parse_multiplication()?;
+
+        loop {
+            let operator = match self.peek().value {
+                Token::Plus => BinaryOperator::Add,
+                Token::Minus => BinaryOperator::Subtract,
+                _ => break,
+            };
+
+            self.advance();
+            let right = self.parse_multiplication()?;
+
+            left = Expression::Binary {
+                operator,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
     }
 
     fn parse_multiplication(&mut self) -> Result<Expression> {
@@ -336,6 +359,41 @@ mod tests {
                 Expression::Unary { .. } => {}
                 _ => panic!("expected unary on left side"),
             },
+            _ => panic!("expected binary"),
+        }
+    }
+
+    #[test]
+    fn multiplication_binds_tighter_than_addition() {
+        let expr = parse_source("a + b * c").unwrap();
+
+        match expr {
+            Expression::Binary {
+                operator: op1,
+                left: _,
+                right,
+            } => {
+                assert!(matches!(op1, BinaryOperator::Add));
+
+                match *right {
+                    Expression::Binary { operator: op2, .. } => {
+                        assert!(matches!(op2, BinaryOperator::Multiply));
+                    }
+                    _ => panic!("expected multiplication on right side"),
+                }
+            }
+            _ => panic!("expected addition at root"),
+        }
+    }
+
+    #[test]
+    fn parentheses_override_precedence() {
+        let expr = parse_source("(a + b) * c").unwrap();
+
+        match expr {
+            Expression::Binary { operator, .. } => {
+                assert!(matches!(operator, BinaryOperator::Multiply));
+            }
             _ => panic!("expected binary"),
         }
     }
