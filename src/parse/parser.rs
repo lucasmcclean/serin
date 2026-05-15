@@ -62,7 +62,51 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Result<Expression> {
-        self.parse_addition()
+        self.parse_equality()
+    }
+
+    fn parse_equality(&mut self) -> Result<Expression> {
+        let mut left = self.parse_comparison()?;
+
+        while let Token::EqualEqual = self.peek().value {
+            let operator = BinaryOperator::Equal;
+
+            self.advance();
+            let right = self.parse_comparison()?;
+
+            left = Expression::Binary {
+                operator,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    fn parse_comparison(&mut self) -> Result<Expression> {
+        let mut left = self.parse_addition()?;
+
+        loop {
+            let operator = match self.peek().value {
+                Token::Less => BinaryOperator::Less,
+                Token::LessEqual => BinaryOperator::LessEqual,
+                Token::Greater => BinaryOperator::Greater,
+                Token::GreaterEqual => BinaryOperator::GreaterEqual,
+                _ => break,
+            };
+
+            self.advance();
+            let right = self.parse_addition()?;
+
+            left = Expression::Binary {
+                operator,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
     }
 
     fn parse_addition(&mut self) -> Result<Expression> {
@@ -395,6 +439,136 @@ mod tests {
                 assert!(matches!(operator, BinaryOperator::Multiply));
             }
             _ => panic!("expected binary"),
+        }
+    }
+
+    #[test]
+    fn parses_equality() {
+        let expr = parse_source("a == b").unwrap();
+
+        match expr {
+            Expression::Binary { operator, .. } => {
+                assert!(matches!(operator, BinaryOperator::Equal));
+            }
+            _ => panic!("expected equality binary"),
+        }
+    }
+
+    #[test]
+    fn parses_less_than() {
+        let expr = parse_source("a < b").unwrap();
+
+        match expr {
+            Expression::Binary { operator, .. } => {
+                assert!(matches!(operator, BinaryOperator::Less));
+            }
+            _ => panic!("expected comparison binary"),
+        }
+    }
+
+    #[test]
+    fn comparison_binds_tighter_than_equality() {
+        let expr = parse_source("a < b == c").unwrap();
+
+        match expr {
+            Expression::Binary {
+                operator,
+                left,
+                right,
+            } => {
+                assert!(matches!(operator, BinaryOperator::Equal));
+
+                match *left {
+                    Expression::Binary { operator: op2, .. } => {
+                        assert!(matches!(op2, BinaryOperator::Less));
+                    }
+                    _ => panic!("expected comparison on left side"),
+                }
+
+                match *right {
+                    Expression::Identifier(ref name) if name == "c" => {}
+                    _ => panic!("unexpected right side"),
+                }
+            }
+            _ => panic!("expected equality at root"),
+        }
+    }
+
+    #[test]
+    fn parses_chained_comparisons_as_left_associative() {
+        let expr = parse_source("a < b < c").unwrap();
+
+        match expr {
+            Expression::Binary { operator, left, .. } => {
+                assert!(matches!(operator, BinaryOperator::Less));
+
+                match *left {
+                    Expression::Binary { operator: op2, .. } => {
+                        assert!(matches!(op2, BinaryOperator::Less));
+                    }
+                    _ => panic!("expected nested comparison"),
+                }
+            }
+            _ => panic!("expected comparison"),
+        }
+    }
+
+    #[test]
+    fn addition_binds_tighter_than_comparison() {
+        let expr = parse_source("a + b < c").unwrap();
+
+        match expr {
+            Expression::Binary {
+                operator,
+                left,
+                right,
+            } => {
+                assert!(matches!(operator, BinaryOperator::Less));
+
+                match *left {
+                    Expression::Binary { operator: op2, .. } => {
+                        assert!(matches!(op2, BinaryOperator::Add));
+                    }
+                    _ => panic!("expected addition on left side"),
+                }
+
+                match *right {
+                    Expression::Identifier(_) => {}
+                    _ => panic!("unexpected right side"),
+                }
+            }
+            _ => panic!("expected comparison root"),
+        }
+    }
+
+    #[test]
+    fn addition_binds_tighter_than_equality() {
+        let expr = parse_source("a + b == c").unwrap();
+
+        match expr {
+            Expression::Binary { operator, left, .. } => {
+                assert!(matches!(operator, BinaryOperator::Equal));
+
+                match *left {
+                    Expression::Binary { operator: op2, .. } => {
+                        assert!(matches!(op2, BinaryOperator::Add));
+                    }
+                    _ => panic!("expected addition on left"),
+                }
+            }
+            _ => panic!("expected equality"),
+        }
+    }
+
+    #[test]
+    fn parentheses_override_comparison_precedence() {
+        let expr = parse_source("(a < b) + c").unwrap();
+
+        match expr {
+            Expression::Binary { operator, .. } => {
+                assert!(matches!(operator, BinaryOperator::Add));
+            }
+            _ => panic!("expected addition"),
         }
     }
 }
