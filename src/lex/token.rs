@@ -11,7 +11,7 @@ pub enum Token {
     Not,
     Backslash,
     Arrow,
-    Equals,
+    Equal,
     LeftParen,
     RightParen,
     Comma,
@@ -24,5 +24,6 @@ pub enum Token {
     Greater,
     LessEqual,
     GreaterEqual,
+    EqualEqual,
     Eof,
 }

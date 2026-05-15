@@ -113,7 +113,13 @@ impl<'a> Lexer<'a> {
 
             Some(b'=') => {
                 self.advance();
-                Token::Equals
+
+                if self.peek() == Some(b'=') {
+                    self.advance();
+                    Token::EqualEqual
+                } else {
+                    Token::Equal
+                }
             }
 
             Some(b'-') => {
@@ -339,7 +345,7 @@ mod tests {
 
     #[test]
     fn lex_operators() {
-        let lexer = Lexer::new("+ - * / % < > <= >=");
+        let lexer = Lexer::new("+ - * / % < > <= >= ==");
 
         let tokens = lexer.tokenize().unwrap();
 
@@ -357,6 +363,7 @@ mod tests {
                 Token::Greater,
                 Token::LessEqual,
                 Token::GreaterEqual,
+                Token::EqualEqual,
                 Token::Eof,
             ]
         );
@@ -379,7 +386,7 @@ mod tests {
             vec![
                 Token::Let,
                 Token::Identifier("add".into()),
-                Token::Equals,
+                Token::Equal,
                 Token::Backslash,
                 Token::Identifier("x".into()),
                 Token::Arrow,
