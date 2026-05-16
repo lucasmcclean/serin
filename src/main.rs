@@ -110,12 +110,12 @@ impl Expression {
 
             Expression::Lambda {
                 parameter,
-                parameter_type,
+                annotation,
                 body,
             } => {
                 out.push_str(&format!("{pad}Lambda(\"{parameter}\")\n"));
 
-                if let Some(t) = parameter_type {
+                if let Some(t) = annotation {
                     out.push_str(&format!("{pad}  Type: {:?}\n", t));
                 }
 

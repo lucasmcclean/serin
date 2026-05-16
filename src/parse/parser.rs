@@ -65,6 +65,7 @@ impl Parser {
         match self.peek().value {
             Token::Let => self.parse_let(),
             Token::If => self.parse_if(),
+            Token::Backslash => self.parse_lambda(),
             _ => self.parse_equality(),
         }
     }
@@ -120,6 +121,36 @@ impl Parser {
             condition: Box::new(condition),
             then_branch: Box::new(then_branch),
             else_branch: Box::new(else_branch),
+        })
+    }
+
+    fn parse_lambda(&mut self) -> Result<Expression> {
+        self.expect(&Token::Backslash)?;
+
+        let parameter = match &self.peek().value {
+            Token::Identifier(name) => {
+                let name = name.clone();
+                self.advance();
+                name
+            }
+
+            token => {
+                return Err(parse::Error::UnexpectedToken {
+                    expected: "identifier".into(),
+                    found: token.clone(),
+                    span: self.peek().span,
+                });
+            }
+        };
+
+        self.expect(&Token::Arrow)?;
+
+        let body = self.parse_expression()?;
+
+        Ok(Expression::Lambda {
+            parameter,
+            annotation: None,
+            body: Box::new(body),
         })
     }
 
@@ -262,6 +293,7 @@ impl Parser {
                 | Token::LeftParen
                 | Token::Let
                 | Token::If
+                | Token::Backslash
         )
     }
 
@@ -923,6 +955,99 @@ mod tests {
                 expect_integer(*else_branch, 3);
             }
             other => panic!("expected if expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_lambda_expression() {
+        let expr = parse_source("\\x -> x").unwrap();
+
+        match expr {
+            Expression::Lambda {
+                parameter,
+                annotation,
+                body,
+            } => {
+                assert_eq!(parameter, "x");
+                assert!(annotation.is_none());
+                expect_identifier(*body, "x");
+            }
+            other => panic!("expected lambda expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_nested_lambda_expression() {
+        let expr = parse_source("\\x -> \\y -> x").unwrap();
+
+        match expr {
+            Expression::Lambda {
+                parameter,
+                annotation,
+                body,
+            } => {
+                assert_eq!(parameter, "x");
+                assert!(annotation.is_none());
+
+                match *body {
+                    Expression::Lambda {
+                        parameter: inner_param,
+                        annotation: inner_type,
+                        body: inner_body,
+                    } => {
+                        assert_eq!(inner_param, "y");
+                        assert!(inner_type.is_none());
+                        expect_identifier(*inner_body, "x");
+                    }
+                    other => panic!("expected nested lambda, got {other:?}"),
+                }
+            }
+            other => panic!("expected lambda expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn lambda_body_can_contain_application() {
+        let expr = parse_source("\\x -> f x").unwrap();
+
+        match expr {
+            Expression::Lambda {
+                parameter,
+                annotation,
+                body,
+            } => {
+                assert_eq!(parameter, "x");
+                assert!(annotation.is_none());
+
+                let (f, x) = expect_application(*body);
+                expect_identifier(f, "f");
+                expect_identifier(x, "x");
+            }
+            other => panic!("expected lambda expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn lambda_body_can_contain_binary_expression() {
+        let expr = parse_source("\\x -> x + 1 * 2").unwrap();
+
+        match expr {
+            Expression::Lambda {
+                parameter,
+                annotation,
+                body,
+            } => {
+                assert_eq!(parameter, "x");
+                assert!(annotation.is_none());
+
+                let (left, right) = expect_binary(*body, BinaryOperator::Add);
+                expect_identifier(left, "x");
+
+                let (one, two) = expect_binary(right, BinaryOperator::Multiply);
+                expect_integer(one, 1);
+                expect_integer(two, 2);
+            }
+            other => panic!("expected lambda expression, got {other:?}"),
         }
     }
 }

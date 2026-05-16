@@ -7,7 +7,7 @@ pub enum Expression {
     Identifier(String),
     Lambda {
         parameter: String,
-        parameter_type: Option<Type>,
+        annotation: Option<Type>,
         body: Box<Expression>,
     },
     Application {
