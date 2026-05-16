@@ -3,5 +3,5 @@ name = "serin"
 version = "0.0.0"
 edition = "2024"
 
-[dependencies]
+[dev-dependencies]
 cargo-sort-derives = "0.12.0"
