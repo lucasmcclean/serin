@@ -62,7 +62,44 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Result<Expression> {
-        self.parse_equality()
+        match self.peek().value {
+            Token::Let => self.parse_let(),
+            _ => self.parse_equality(),
+        }
+    }
+
+    fn parse_let(&mut self) -> Result<Expression> {
+        self.expect(&Token::Let)?;
+
+        let name = match &self.peek().value {
+            Token::Identifier(name) => {
+                let name = name.clone();
+                self.advance();
+                name
+            }
+
+            token => {
+                return Err(parse::Error::UnexpectedToken {
+                    expected: "identifier".into(),
+                    found: token.clone(),
+                    span: self.peek().span,
+                });
+            }
+        };
+
+        self.expect(&Token::Equal)?;
+
+        let value = self.parse_expression()?;
+
+        self.expect(&Token::In)?;
+
+        let body = self.parse_expression()?;
+
+        Ok(Expression::Let {
+            name,
+            value: Box::new(value),
+            body: Box::new(body),
+        })
     }
 
     fn parse_equality(&mut self) -> Result<Expression> {
@@ -198,7 +235,11 @@ impl Parser {
     fn starts_primary(&self) -> bool {
         matches!(
             &self.peek().value,
-            Token::Integer(_) | Token::Boolean(_) | Token::Identifier(_) | Token::LeftParen
+            Token::Integer(_)
+                | Token::Boolean(_)
+                | Token::Identifier(_)
+                | Token::LeftParen
+                | Token::Let
         )
     }
 
@@ -690,5 +731,82 @@ mod tests {
         let (c, d) = expect_binary(right_less, BinaryOperator::Less);
         expect_identifier(c, "c");
         expect_identifier(d, "d");
+    }
+
+    #[test]
+    fn parses_let_expression() {
+        let expr = parse_source("let x = 1 in x").unwrap();
+
+        match expr {
+            Expression::Let { name, value, body } => {
+                assert_eq!(name, "x");
+                expect_integer(*value, 1);
+                expect_identifier(*body, "x");
+            }
+            other => panic!("expected let expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_nested_let_expression() {
+        let expr = parse_source("let x = 1 in let y = 2 in x").unwrap();
+
+        match expr {
+            Expression::Let { name, value, body } => {
+                assert_eq!(name, "x");
+                expect_integer(*value, 1);
+
+                match *body {
+                    Expression::Let {
+                        name: inner_name,
+                        value: inner_value,
+                        body: inner_body,
+                    } => {
+                        assert_eq!(inner_name, "y");
+                        expect_integer(*inner_value, 2);
+                        expect_identifier(*inner_body, "x");
+                    }
+                    other => panic!("expected nested let, got {other:?}"),
+                }
+            }
+            other => panic!("expected let expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn let_binds_looser_than_application() {
+        let expr = parse_source("let f = x in f y").unwrap();
+
+        match expr {
+            Expression::Let { name, value, body } => {
+                assert_eq!(name, "f");
+                expect_identifier(*value, "x");
+
+                let (fun, arg) = expect_application(*body);
+                expect_identifier(fun, "f");
+                expect_identifier(arg, "y");
+            }
+            other => panic!("expected let expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn let_bodies_can_contain_binary_expressions() {
+        let expr = parse_source("let x = 1 in x + 2 * 3").unwrap();
+
+        match expr {
+            Expression::Let { name, value, body } => {
+                assert_eq!(name, "x");
+                expect_integer(*value, 1);
+
+                let (left, right) = expect_binary(*body, BinaryOperator::Add);
+                expect_identifier(left, "x");
+
+                let (two, three) = expect_binary(right, BinaryOperator::Multiply);
+                expect_integer(two, 2);
+                expect_integer(three, 3);
+            }
+            other => panic!("expected let expression, got {other:?}"),
+        }
     }
 }
