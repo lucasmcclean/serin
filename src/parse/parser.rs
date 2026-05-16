@@ -287,13 +287,7 @@ impl Parser {
     fn starts_primary(&self) -> bool {
         matches!(
             &self.peek().value,
-            Token::Integer(_)
-                | Token::Boolean(_)
-                | Token::Identifier(_)
-                | Token::LeftParen
-                | Token::Let
-                | Token::If
-                | Token::Backslash
+            Token::Integer(_) | Token::Boolean(_) | Token::Identifier(_) | Token::LeftParen
         )
     }
 
