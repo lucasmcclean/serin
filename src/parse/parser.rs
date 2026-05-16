@@ -319,9 +319,24 @@ impl Parser {
 
             Token::LeftParen => {
                 self.advance();
-                let expr = self.parse_expression()?;
-                self.expect(&Token::RightParen)?;
-                Ok(expr)
+
+                let first = self.parse_expression()?;
+
+                if matches!(self.peek().value, Token::Comma) {
+                    let mut items = vec![first];
+
+                    while matches!(self.peek().value, Token::Comma) {
+                        self.advance();
+                        items.push(self.parse_expression()?);
+                    }
+
+                    self.expect(&Token::RightParen)?;
+
+                    Ok(Expression::Tuple(items))
+                } else {
+                    self.expect(&Token::RightParen)?;
+                    Ok(first)
+                }
             }
 
             Token::Eof => Err(parse::Error::UnexpectedEof {
@@ -409,6 +424,22 @@ mod tests {
         match expr {
             Expression::Application { function, argument } => (*function, *argument),
             other => panic!("expected application, got {other:?}"),
+        }
+    }
+
+    fn expect_tuple(expr: Expression, expected_len: usize) -> Vec<Expression> {
+        match expr {
+            Expression::Tuple(items) => {
+                assert_eq!(
+                    items.len(),
+                    expected_len,
+                    "expected tuple of length {}, got {}",
+                    expected_len,
+                    items.len()
+                );
+                items
+            }
+            other => panic!("expected tuple of length {expected_len}, got {other:?}"),
         }
     }
 
@@ -1048,6 +1079,96 @@ mod tests {
                 expect_integer(two, 2);
             }
             other => panic!("expected lambda expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_two_element_tuple() {
+        let expr = parse_source("(x, y)").unwrap();
+
+        let items = expect_tuple(expr, 2);
+        let mut items = items.into_iter();
+
+        expect_identifier(items.next().unwrap(), "x");
+        expect_identifier(items.next().unwrap(), "y");
+    }
+
+    #[test]
+    fn parses_three_element_tuple() {
+        let expr = parse_source("(x, y, z)").unwrap();
+
+        let items = expect_tuple(expr, 3);
+        let mut items = items.into_iter();
+
+        expect_identifier(items.next().unwrap(), "x");
+        expect_identifier(items.next().unwrap(), "y");
+        expect_identifier(items.next().unwrap(), "z");
+    }
+
+    #[test]
+    fn tuple_items_can_be_expressions() {
+        let expr = parse_source("(x + 1, f y, -z)").unwrap();
+
+        let items = expect_tuple(expr, 3);
+        let mut items = items.into_iter();
+
+        let (x, one) = expect_binary(items.next().unwrap(), BinaryOperator::Add);
+        expect_identifier(x, "x");
+        expect_integer(one, 1);
+
+        let (f, y) = expect_application(items.next().unwrap());
+        expect_identifier(f, "f");
+        expect_identifier(y, "y");
+
+        let z = expect_unary(items.next().unwrap(), UnaryOperator::Negate);
+        expect_identifier(z, "z");
+    }
+
+    #[test]
+    fn tuple_can_appear_as_application_argument() {
+        let expr = parse_source("f (x, y)").unwrap();
+
+        let (fun, arg) = expect_application(expr);
+        expect_identifier(fun, "f");
+
+        let items = expect_tuple(arg, 2);
+        let mut items = items.into_iter();
+
+        expect_identifier(items.next().unwrap(), "x");
+        expect_identifier(items.next().unwrap(), "y");
+    }
+
+    #[test]
+    fn tuple_can_appear_inside_let_and_if() {
+        let expr = parse_source("let x = (1, 2) in if true then x else (3, 4)").unwrap();
+
+        match expr {
+            Expression::Let { name, value, body } => {
+                assert_eq!(name, "x");
+
+                let items = expect_tuple(*value, 2);
+                let mut items = items.into_iter();
+                expect_integer(items.next().unwrap(), 1);
+                expect_integer(items.next().unwrap(), 2);
+
+                match *body {
+                    Expression::If {
+                        condition,
+                        then_branch,
+                        else_branch,
+                    } => {
+                        expect_boolean(*condition, true);
+                        expect_identifier(*then_branch, "x");
+
+                        let items = expect_tuple(*else_branch, 2);
+                        let mut items = items.into_iter();
+                        expect_integer(items.next().unwrap(), 3);
+                        expect_integer(items.next().unwrap(), 4);
+                    }
+                    other => panic!("expected if expression, got {other:?}"),
+                }
+            }
+            other => panic!("expected let expression, got {other:?}"),
         }
     }
 }
