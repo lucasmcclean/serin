@@ -64,6 +64,7 @@ impl Parser {
     fn parse_expression(&mut self) -> Result<Expression> {
         match self.peek().value {
             Token::Let => self.parse_let(),
+            Token::If => self.parse_if(),
             _ => self.parse_equality(),
         }
     }
@@ -99,6 +100,26 @@ impl Parser {
             name,
             value: Box::new(value),
             body: Box::new(body),
+        })
+    }
+
+    fn parse_if(&mut self) -> Result<Expression> {
+        self.expect(&Token::If)?;
+
+        let condition = self.parse_expression()?;
+
+        self.expect(&Token::Then)?;
+
+        let then_branch = self.parse_expression()?;
+
+        self.expect(&Token::Else)?;
+
+        let else_branch = self.parse_expression()?;
+
+        Ok(Expression::If {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            else_branch: Box::new(else_branch),
         })
     }
 
@@ -240,6 +261,7 @@ impl Parser {
                 | Token::Identifier(_)
                 | Token::LeftParen
                 | Token::Let
+                | Token::If
         )
     }
 
@@ -807,6 +829,100 @@ mod tests {
                 expect_integer(three, 3);
             }
             other => panic!("expected let expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_if_expression() {
+        let expr = parse_source("if true then 1 else 0").unwrap();
+
+        match expr {
+            Expression::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                expect_boolean(*condition, true);
+                expect_integer(*then_branch, 1);
+                expect_integer(*else_branch, 0);
+            }
+            other => panic!("expected if expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn if_condition_can_be_binary_expression() {
+        let expr = parse_source("if a < b then x else y").unwrap();
+
+        match expr {
+            Expression::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let (left, right) = expect_binary(*condition, BinaryOperator::Less);
+                expect_identifier(left, "a");
+                expect_identifier(right, "b");
+
+                expect_identifier(*then_branch, "x");
+                expect_identifier(*else_branch, "y");
+            }
+            other => panic!("expected if expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn if_branches_can_contain_application() {
+        let expr = parse_source("if x then f y else g z").unwrap();
+
+        match expr {
+            Expression::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                expect_identifier(*condition, "x");
+
+                let (f, y) = expect_application(*then_branch);
+                expect_identifier(f, "f");
+                expect_identifier(y, "y");
+
+                let (g, z) = expect_application(*else_branch);
+                expect_identifier(g, "g");
+                expect_identifier(z, "z");
+            }
+            other => panic!("expected if expression, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn nested_if_expressions_parse_correctly() {
+        let expr = parse_source("if x then if y then 1 else 2 else 3").unwrap();
+
+        match expr {
+            Expression::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                expect_identifier(*condition, "x");
+
+                match *then_branch {
+                    Expression::If {
+                        condition: inner_cond,
+                        then_branch: inner_then,
+                        else_branch: inner_else,
+                    } => {
+                        expect_identifier(*inner_cond, "y");
+                        expect_integer(*inner_then, 1);
+                        expect_integer(*inner_else, 2);
+                    }
+                    other => panic!("expected nested if in then-branch, got {other:?}"),
+                }
+
+                expect_integer(*else_branch, 3);
+            }
+            other => panic!("expected if expression, got {other:?}"),
         }
     }
 }
