@@ -188,13 +188,11 @@ impl Parser {
         let mut left = self.parse_comparison()?;
 
         while let Token::EqualEqual = self.peek().value {
-            let operator = BinaryOperator::Equal;
-
             self.advance();
             let right = self.parse_comparison()?;
 
             left = Expression::Binary {
-                operator,
+                operator: BinaryOperator::Equal,
                 left: Box::new(left),
                 right: Box::new(right),
             };
@@ -447,9 +445,7 @@ mod tests {
                 assert_eq!(
                     items.len(),
                     expected_len,
-                    "expected tuple of length {}, got {}",
-                    expected_len,
-                    items.len()
+                    "expected tuple of length {expected_len}"
                 );
                 items
             }

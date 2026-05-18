@@ -7,9 +7,4 @@ pub enum Error {
         found: Token,
         span: Span,
     },
-
-    Message {
-        message: String,
-        span: Span,
-    },
 }
