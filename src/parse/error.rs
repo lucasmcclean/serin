@@ -8,10 +8,6 @@ pub enum Error {
         span: Span,
     },
 
-    UnexpectedEof {
-        expected: String,
-    },
-
     Message {
         message: String,
         span: Span,

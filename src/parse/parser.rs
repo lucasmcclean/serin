@@ -40,21 +40,15 @@ impl Parser {
         self.position += 1;
     }
 
-    fn expect(&mut self, kind: &Token) -> Result<()> {
+    fn expect(&mut self, kind: Token) -> Result<()> {
         let token = self.peek();
 
-        if matches!(token.value, Token::Eof) {
-            return Err(parse::Error::UnexpectedEof {
-                expected: format!("{:?}", kind),
-            });
-        }
-
-        if std::mem::discriminant(&token.value) == std::mem::discriminant(kind) {
+        if token.value == kind {
             self.advance();
             Ok(())
         } else {
             Err(parse::Error::UnexpectedToken {
-                expected: format!("{:?}", kind),
+                expected: format!("{kind:?}"),
                 found: token.value.clone(),
                 span: token.span,
             })
@@ -71,7 +65,7 @@ impl Parser {
     }
 
     fn parse_let(&mut self) -> Result<Expression> {
-        self.expect(&Token::Let)?;
+        self.expect(Token::Let)?;
 
         let name = match &self.peek().value {
             Token::Identifier(name) => {
@@ -89,11 +83,11 @@ impl Parser {
             }
         };
 
-        self.expect(&Token::Equal)?;
+        self.expect(Token::Equal)?;
 
         let value = self.parse_expression()?;
 
-        self.expect(&Token::In)?;
+        self.expect(Token::In)?;
 
         let body = self.parse_expression()?;
 
@@ -105,15 +99,15 @@ impl Parser {
     }
 
     fn parse_if(&mut self) -> Result<Expression> {
-        self.expect(&Token::If)?;
+        self.expect(Token::If)?;
 
         let condition = self.parse_expression()?;
 
-        self.expect(&Token::Then)?;
+        self.expect(Token::Then)?;
 
         let then_branch = self.parse_expression()?;
 
-        self.expect(&Token::Else)?;
+        self.expect(Token::Else)?;
 
         let else_branch = self.parse_expression()?;
 
@@ -125,7 +119,7 @@ impl Parser {
     }
 
     fn parse_lambda(&mut self) -> Result<Expression> {
-        self.expect(&Token::Backslash)?;
+        self.expect(Token::Backslash)?;
 
         let parameter = match &self.peek().value {
             Token::Identifier(name) => {
@@ -143,7 +137,7 @@ impl Parser {
             }
         };
 
-        self.expect(&Token::Arrow)?;
+        self.expect(Token::Arrow)?;
 
         let body = self.parse_expression()?;
 
@@ -360,18 +354,14 @@ impl Parser {
                         items.push(self.parse_expression()?);
                     }
 
-                    self.expect(&Token::RightParen)?;
+                    self.expect(Token::RightParen)?;
 
                     Ok(Expression::Tuple(items))
                 } else {
-                    self.expect(&Token::RightParen)?;
+                    self.expect(Token::RightParen)?;
                     Ok(first)
                 }
             }
-
-            Token::Eof => Err(parse::Error::UnexpectedEof {
-                expected: "expression".into(),
-            }),
 
             _ => Err(parse::Error::UnexpectedToken {
                 expected: "primary expression".into(),
@@ -418,15 +408,12 @@ mod tests {
         match expr {
             Expression::Unary { operator, operand } => {
                 assert_eq!(
-                    std::mem::discriminant(&operator),
-                    std::mem::discriminant(&expected),
-                    "expected unary operator {:?}, got {:?}",
-                    expected,
-                    operator
+                    operator, expected,
+                    "expected unary {expected:?}, got {operator:?}"
                 );
                 *operand
             }
-            other => panic!("expected unary {:?}, got {other:?}", expected),
+            other => panic!("expected unary {expected:?}, got {other:?}"),
         }
     }
 
@@ -438,15 +425,12 @@ mod tests {
                 right,
             } => {
                 assert_eq!(
-                    std::mem::discriminant(&operator),
-                    std::mem::discriminant(&expected),
-                    "expected binary operator {:?}, got {:?}",
-                    expected,
-                    operator
+                    operator, expected,
+                    "expected binary {expected:?}, got {operator:?}"
                 );
                 (*left, *right)
             }
-            other => panic!("expected binary {:?}, got {other:?}", expected),
+            other => panic!("expected binary {expected:?}, got {other:?}"),
         }
     }
 
@@ -520,7 +504,9 @@ mod tests {
         let err = parse_source("(x").unwrap_err();
 
         match err {
-            parse::Error::UnexpectedEof { .. } => {}
+            parse::Error::UnexpectedToken {
+                found: Token::Eof, ..
+            } => {}
             other => panic!("unexpected error: {other:?}"),
         }
     }
