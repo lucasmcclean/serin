@@ -67,7 +67,7 @@ impl<'a> Lexer<'a> {
         let start = self.position;
 
         let token = match self.peek() {
-            Some(b'0'..=b'9') => self.lex_integer(),
+            Some(b'0'..=b'9') => self.lex_integer()?,
 
             Some(b'a'..=b'z' | b'A'..=b'Z' | b'_') => self.lex_identifier_or_keyword(),
 
@@ -168,7 +168,7 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    fn lex_integer(&mut self) -> Token {
+    fn lex_integer(&mut self) -> Result<Token, lex::Error> {
         let start = self.position;
 
         while matches!(self.peek(), Some(b'0'..=b'9')) {
@@ -177,9 +177,11 @@ impl<'a> Lexer<'a> {
 
         let slice = &self.source[start..self.position];
 
-        let text = std::str::from_utf8(slice).unwrap();
+        let text = unsafe { std::str::from_utf8_unchecked(slice) };
 
-        Token::Integer(text.parse().unwrap())
+        text.parse::<i64>()
+            .map(Token::Integer)
+            .map_err(|_| lex::Error::IntegerOverflow(text.to_string()))
     }
 
     fn lex_identifier_or_keyword(&mut self) -> Token {
@@ -194,7 +196,7 @@ impl<'a> Lexer<'a> {
 
         let slice = &self.source[start..self.position];
 
-        let text = std::str::from_utf8(slice).unwrap();
+        let text = unsafe { std::str::from_utf8_unchecked(slice) };
 
         match text {
             "let" => Token::Let,
