@@ -1,5 +1,5 @@
 pub mod expression;
-pub mod r#type;
+pub mod types;
 
 pub use expression::Expression;
-pub use r#type::Type;
+pub use types::Type;
