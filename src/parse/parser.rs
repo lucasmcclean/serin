@@ -66,7 +66,7 @@ impl Parser {
             Token::Let => self.parse_let(),
             Token::If => self.parse_if(),
             Token::Backslash => self.parse_lambda(),
-            _ => self.parse_equality(),
+            _ => self.parse_logical_or(),
         }
     }
 
@@ -152,6 +152,42 @@ impl Parser {
             annotation: None,
             body: Box::new(body),
         })
+    }
+
+    fn parse_logical_or(&mut self) -> Result<Expression> {
+        let mut left = self.parse_logical_and()?;
+
+        while let Token::Or = self.peek().value {
+            self.advance();
+
+            let right = self.parse_logical_and()?;
+
+            left = Expression::Binary {
+                operator: BinaryOperator::Or,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    fn parse_logical_and(&mut self) -> Result<Expression> {
+        let mut left = self.parse_equality()?;
+
+        while let Token::And = self.peek().value {
+            self.advance();
+
+            let right = self.parse_equality()?;
+
+            left = Expression::Binary {
+                operator: BinaryOperator::And,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
     }
 
     fn parse_equality(&mut self) -> Result<Expression> {
@@ -1164,5 +1200,67 @@ mod tests {
             }
             other => panic!("expected let expression, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_logical_and() {
+        let expr = parse_source("a and b").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::And);
+
+        expect_identifier(left, "a");
+        expect_identifier(right, "b");
+    }
+
+    #[test]
+    fn parses_logical_or() {
+        let expr = parse_source("a or b").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Or);
+
+        expect_identifier(left, "a");
+        expect_identifier(right, "b");
+    }
+
+    #[test]
+    fn and_binds_tighter_than_or() {
+        let expr = parse_source("a or b and c").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Or);
+
+        expect_identifier(left, "a");
+
+        let (b, c) = expect_binary(right, BinaryOperator::And);
+
+        expect_identifier(b, "b");
+        expect_identifier(c, "c");
+    }
+
+    #[test]
+    fn equality_binds_tighter_than_and() {
+        let expr = parse_source("a == b and c").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::And);
+
+        let (a, b) = expect_binary(left, BinaryOperator::Equal);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+
+        expect_identifier(right, "c");
+    }
+
+    #[test]
+    fn comparison_binds_tighter_than_or() {
+        let expr = parse_source("a < b or c").unwrap();
+
+        let (left, right) = expect_binary(expr, BinaryOperator::Or);
+
+        let (a, b) = expect_binary(left, BinaryOperator::Less);
+
+        expect_identifier(a, "a");
+        expect_identifier(b, "b");
+
+        expect_identifier(right, "c");
     }
 }

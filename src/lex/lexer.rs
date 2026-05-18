@@ -203,6 +203,8 @@ impl<'a> Lexer<'a> {
             "then" => Token::Then,
             "else" => Token::Else,
             "not" => Token::Not,
+            "and" => Token::And,
+            "or" => Token::Or,
             "true" => Token::Boolean(true),
             "false" => Token::Boolean(false),
 

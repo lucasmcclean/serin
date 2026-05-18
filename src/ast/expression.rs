@@ -48,6 +48,8 @@ pub enum BinaryOperator {
     LessEqual,
     GreaterEqual,
     Equal,
+    And,
+    Or,
 }
 
 #[derive(Clone, Copy, Debug)]
