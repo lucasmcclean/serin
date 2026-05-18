@@ -458,6 +458,18 @@ mod tests {
     }
 
     #[test]
+    fn errors_on_empty_input() {
+        let err = parse_source("").unwrap_err();
+
+        match err {
+            parse::Error::UnexpectedToken {
+                found: Token::Eof, ..
+            } => {}
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
     fn parses_integer() {
         let expr = parse_source("42").unwrap();
         expect_integer(expr, 42);
@@ -832,6 +844,18 @@ mod tests {
         let (c, d) = expect_binary(right_less, BinaryOperator::Less);
         expect_identifier(c, "c");
         expect_identifier(d, "d");
+    }
+
+    #[test]
+    fn errors_on_unterminated_let() {
+        let err = parse_source("let x = ").unwrap_err();
+
+        match err {
+            parse::Error::UnexpectedToken {
+                found: Token::Eof, ..
+            } => {}
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
