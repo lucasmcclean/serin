@@ -271,6 +271,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn lex_empty_input() {
+        let lexer = Lexer::new("");
+
+        let tokens = lexer.tokenize().unwrap();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].value, Token::Eof);
+    }
+
+    #[test]
     fn lex_integer() {
         let lexer = Lexer::new("123");
 
