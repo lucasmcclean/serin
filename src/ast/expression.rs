@@ -1,6 +1,6 @@
 use crate::ast::Type;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Integer(i64),
     Boolean(bool),
@@ -36,7 +36,7 @@ pub enum Expression {
     Tuple(Vec<Expression>),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -52,7 +52,7 @@ pub enum BinaryOperator {
     Or,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnaryOperator {
     Not,
     Negate,
