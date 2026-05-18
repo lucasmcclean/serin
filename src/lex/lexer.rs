@@ -460,4 +460,13 @@ mod tests {
 
         assert!(matches!(result, Err(lex::Error::UnterminatedComment)));
     }
+
+    #[test]
+    fn lex_integer_overflow() {
+        let lexer = Lexer::new("99999999999999999999");
+
+        let result = lexer.tokenize();
+
+        assert!(matches!(result, Err(lex::Error::IntegerOverflow(_))));
+    }
 }
